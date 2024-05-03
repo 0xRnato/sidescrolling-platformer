@@ -9,10 +9,9 @@ const config: Types.Core.GameConfig = {
   height: 600,
   parent: 'game-container',
   physics: {
-    default: 'arcade',
-    arcade: {
-      gravity: { y: 200 },
-      debug: false
+    default: 'matter',
+    matter: {
+      debug: true
     }
   },
   // backgroundColor: '#028af8',
