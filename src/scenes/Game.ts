@@ -1,92 +1,74 @@
 import Phaser from 'phaser';
+import PlayerController from './PlayerController';
+import ObstaclesController from './ObstaclesController';
 
 export class Game extends Phaser.Scene {
-  private cursors?: Phaser.Types.Input.Keyboard.CursorKeys
+  private cursors: Phaser.Types.Input.Keyboard.CursorKeys
   private penguin?: Phaser.Physics.Matter.Sprite
-
-  private isTouchingGround = false;
+  private playerController?: PlayerController
+  private obstacles!: ObstaclesController
 
   constructor() {
     super('game');
   }
 
   init() {
-    this.cursors = this.input.keyboard?.createCursorKeys();
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.obstacles = new ObstaclesController();
   }
 
   preload() {
     this.load.atlas('penguin', 'assets/penguin.png', 'assets/penguin.json');
     this.load.image('tiles', 'assets/sheet.png');
     this.load.tilemapTiledJSON('tilemap', 'assets/iceworld.json');
+
+    this.load.image('star', 'assets/star.png');
   }
 
   create() {
-    this.createPenguinAnimations()
+    this.scene.launch('ui')
 
     const map = this.make.tilemap({ key: 'tilemap' });
     const tileset = map.addTilesetImage('iceworld', 'tiles');
     const ground = map.createLayer('ground', tileset!);
     ground?.setCollisionByProperty({ collides: true });
 
+    map.createLayer('obstacles', tileset!);
+
     const objectsLayer = map.getObjectLayer('objects');
     objectsLayer?.objects.forEach((objectData) => {
-      const { x = 0, y = 0, name, width = 0 } = objectData
+      const { x = 0, y = 0, name, width = 0, height = 0 } = objectData
       switch (name) {
         case 'penguin-spawn':
           this.penguin = this.matter.add
             .sprite(x + (width * 0.5), y, 'penguin')
-            .play('player-idle')
             .setFixedRotation();
 
-          this.penguin.setOnCollide(() => {
-            this.isTouchingGround = true
-          })
+          this.playerController = new PlayerController(this, this.penguin, this.cursors, this.obstacles)
+
           this.cameras.main.startFollow(this.penguin)
+          break
+        case 'star':
+          const star = this.matter.add.sprite(x + (width * 0.5), y + (height * 0.5), 'star', undefined, {
+            isStatic: true,
+            isSensor: true
+          })
+          star.setData('type', 'star')
+          break
+        case 'spikes':
+          const spike = this.matter.add.rectangle(x + (width * 0.5), y + (height * 0.5), width, height, {
+            isStatic: true
+          })
+          this.obstacles.add('spikes', spike)
           break
       }
     })
 
-
     this.matter.world.convertTilemapLayer(ground!)
   }
 
-  update() {
-    if (!this.penguin) {
-      return;
-    }
-
-    const speed = 5;
-    if (this.cursors?.left.isDown) {
-      this.penguin.flipX = true;
-      this.penguin.setVelocityX(-speed);
-      this.penguin.play('player-walk', true);
-    } else if (this.cursors?.right.isDown) {
-      this.penguin.flipX = false;
-      this.penguin.setVelocityX(speed);
-      this.penguin.play('player-walk', true);
-    } else {
-      this.penguin.setVelocityX(0);
-      this.penguin.play('player-idle', true);
-    }
-
-    const spaceJustPressed = Phaser.Input.Keyboard.JustDown(this.cursors!.space);
-    if (spaceJustPressed && this.isTouchingGround) {
-      this.penguin.setVelocityY(-12);
-      this.isTouchingGround = false
-    }
-  }
-
-  private createPenguinAnimations() {
-    this.anims.create({
-      key: 'player-idle',
-      frames: [{ key: 'penguin', frame: 'penguin_walk01.png' }],
-    })
-
-    this.anims.create({
-      key: 'player-walk',
-      frameRate: 10,
-      frames: this.anims.generateFrameNames('penguin', { start: 1, end: 4, prefix: 'penguin_walk0', suffix: '.png' }),
-      repeat: -1
-    })
+  update(t: number, dt: number) {
+    if (!this.playerController) return
+    this.playerController.update(dt)
   }
 }
